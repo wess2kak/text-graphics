@@ -5,7 +5,9 @@ turn images or YouTube videos into console art
 default width is 315, height 80, which can be changed towards the top of the script
 
 ## Requirements
-* pytube `(py -m install pytube)`
+* pytube `(py -m pip install pytube)`
+* numba `(py -m pip install numba)`
+* opencv-python (cv2) `(py -m pip install opencv-python)`
 ## Usage
 `python process_image.py image.jpg`
 `python process_image.py animated.gif`
