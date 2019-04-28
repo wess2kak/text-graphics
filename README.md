@@ -2,6 +2,7 @@
 
 # text-graphics
 turn images or YouTube videos into console art
+
 default width is 315, height 80, which can be changed towards the top of the script
 
 ## Requirements
