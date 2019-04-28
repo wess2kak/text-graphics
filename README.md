@@ -1,0 +1,10 @@
+# text-graphics
+turn images or YouTube videos into console art
+default width is 315, height 80, which can be changed towards the top of the script
+
+## Requirements
+* pytube `(py -m install pytube)`
+## Usage
+`python process_image.py image.jpg`
+`python process_image.py animated.gif`
+`python process_image.py https://www.youtube.com/watch?v=_X6VoFBCE9k`
