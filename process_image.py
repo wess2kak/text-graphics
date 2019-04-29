@@ -11,7 +11,6 @@ from pytube import YouTube
 
 if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
     from ctypes import windll
-
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
 FRAME_RATE = 20
 FRAME_TIME = 1 / FRAME_RATE
@@ -50,86 +49,33 @@ def clear_screen():
     stdout.write(chr(27) + "[2J")
 
 
-def process_image(file, debug=False):
-    """Used for image inputs"""
-    im = Image.open(file)
-    if im.format == 'GIF' and im.is_animated:
-        n_frames = 0
-        is_rgb = True
-        try:
-            int(im.load()[0, 0])
-            is_rgb = False
-            try:
-                trans = im.info['transparency']
-            except:
-                trans = None
-        except:
-            pass
-        if debug:
-            t = Timer()
-        while im:
-            frame_timer = datetime.now().timestamp()
-            if debug:
-                t.end('sleep')
-            name = '%s-%s.png' % (file, str(n_frames))
-            im.save(name, 'png')
-            if debug:
-                t.end('save individual frame')
-            f = Image.open(name)
-            if debug:
-                t.end('open image')
-            # clear_screen()
-            if debug:
-                t.end('clear screen')
-            out = ascii_convert(f, debug=debug, rgb=is_rgb, transparency_color=trans)
-            if debug:
-                t.end('generate image')
-            print(out)
-            if debug:
-                t.end('print image')
-                for data in t.times:
-                    print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
-                t.end('print debug')
-            sleep_time = (1 / FRAME_RATE) - (datetime.now().timestamp() - frame_timer)
-            sleep(sleep_time if sleep_time > 0 else 0)
-            n_frames += 1
-            try:
-                im.seek(n_frames)
-            except EOFError:
-                n_frames = 0
-    elif str(im.format).lower() in IMAGE_FORMATS:
-        print(ascii_convert(im, debug=debug))
-
-
 @njit(parallel=True, fastmath=True)
-def populate_color_hsv(y, x, frame):
+def populate_color_hsv(h, s, v):
     """Used by fast algorithm"""
-    h, s, v = frame[y][x]
     if 140 >= h >= 81:  # green
-        if s >= 50:
+        if s + v >= 150:
             return 2
     elif 221 <= h <= 240:  # blue
-        if s >= 50:
+        if s + v >= 150:
             return 3
     elif 60 >= h >= 51:  # yellow
-        if s >= 50:
+        if s + v >= 150:
             return 4
     elif 170 <= h <= 200:  # cyan
-        if s >= 50:
+        if s + v >= 150:
             return 5
     elif h >= 281 or h <= 320:  # purple/magenta
-        if s >= 50:
+        if s + v >= 150:
             return 6
     elif h >= 355 or h <= 10:  # red
-        if s >= 50:
+        if s + v >= 150:
             return 1
     return 0
 
 
 @njit(parallel=True, fastmath=True)
-def populate_pixel_hsv(y, x, frame):
+def populate_pixel_hsv(v):
     """Used by fast algorithm"""
-    h, s, v = frame[y][x]
     pixel_index = int(v / DIV)
     return pixel_index
 
@@ -147,13 +93,15 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
             line += GRAY[0]
         if COLOR:
             for x in range(output_x):
-                p = populate_pixel_hsv(y, x, hsv)
-                c = populate_color_hsv(y, x, hsv)
+                h, s, v = frame[y][x]
+                p = populate_pixel_hsv(v)
+                c = populate_color_hsv(h, s, v)
                 line += AVAILABLE_COLORS[c] + GRAY[p]
             line += WHITE if COLOR else ''
         else:
             for x in range(output_x):
-                line += GRAY[populate_pixel_hsv(y, x, hsv)]
+                v = frame[y][x][2]
+                line += GRAY[populate_pixel_hsv(v)]
         screen += line + '\n'
     if debug:
         t.end('ascii_convert_fast')
@@ -164,6 +112,64 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
     screen = screen.rstrip()
     if V_BLANK or output_y < MAX_Y:
         clear_screen()
+    return screen
+
+
+def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
+    """Slow algorithm"""
+    if debug:
+        t = Timer()
+    im = im.resize((im.size[0] * 2, im.size[1]))
+    if im.size[0] > MAX_X or im.size[1] > MAX_Y:
+        if im.size[0] > MAX_X:
+            percent = (MAX_X / float(im.size[0]))
+            h_size = int((float(im.size[1]) * float(percent)))
+            w_size = MAX_X
+        if im.size[1] > MAX_Y:
+            percent = (MAX_Y / float(im.size[1]))
+            h_size = MAX_Y
+            w_size = int((float(im.size[0]) * float(percent)))
+        im = im.resize((w_size, h_size))
+    pixel_access = im.load()
+    left_blank = int((MAX_X - im.size[0]) / 2)
+
+    screen = ''
+    if rgb:
+        hsv = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2HSV)
+        for y in range(im.size[1]):
+            line = ''
+            for x in range(left_blank):
+                line += GRAY[0]
+            if COLOR:
+                for x in range(im.size[0]):
+                    h, s, v = hsv[y][x]
+                    p = populate_pixel_hsv(v)
+                    c = populate_color_hsv(h, s, v)
+                    line += AVAILABLE_COLORS[c] + GRAY[p]
+            else:
+                for x in range(im.size[0]):
+                    h, s, v = hsv[y][x]
+                    line += GRAY[populate_pixel_hsv(v)]
+            screen += line + '\n'
+    else:
+        for y in range(im.size[1]):
+            line = ''
+            for x in range(left_blank):
+                line += GRAY[0]
+            for x in range(im.size[0]):
+                color_int = pixel_access[x, y]
+                line += GRAY[int(color_int / DIV)] if color_int == transparency_color else GRAY[0]
+            screen += line + '\n'
+
+    if debug:
+        t.end('ascii_convert')
+        for data in t.times:
+            screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
+        screen += ' potential fps: ' + str(1 / t.times['ascii_convert'])
+    screen = screen.rstrip()
+    if im.size[1] > MAX_Y:
+        for line in range(MAX_Y - im.size[1]):
+            screen += '\n'
     return screen
 
 
@@ -228,62 +234,6 @@ def process_video(file, fast_algorithm=False, debug=False):
     return
 
 
-def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
-    """Slow algorithm"""
-    if debug:
-        t = Timer()
-    im = im.resize((im.size[0] * 2, im.size[1]))
-    if im.size[0] > MAX_X or im.size[1] > MAX_Y:
-        if im.size[0] > MAX_X:
-            percent = (MAX_X / float(im.size[0]))
-            h_size = int((float(im.size[1]) * float(percent)))
-            w_size = MAX_X
-        if im.size[1] > MAX_Y:
-            percent = (MAX_Y / float(im.size[1]))
-            h_size = MAX_Y
-            w_size = int((float(im.size[0]) * float(percent)))
-        im = im.resize((w_size, h_size))
-    pixel_access = im.load()
-    left_blank = int((MAX_X - im.size[0]) / 2)
-
-    screen = ''
-    if rgb:
-        hsv = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2HSV)
-        for y in range(im.size[1]):
-            line = ''
-            for x in range(left_blank):
-                line += GRAY[0]
-            if COLOR:
-                for x in range(im.size[0]):
-                    p = populate_pixel_hsv(y, x, hsv)
-                    c = populate_color_hsv(y, x, hsv)
-                    line += AVAILABLE_COLORS[c] + GRAY[p]
-            else:
-                for x in range(im.size[0]):
-                    line += GRAY[populate_pixel_hsv(y, x, hsv)]
-            screen += line + '\n'
-    else:
-        for y in range(im.size[1]):
-            line = ''
-            for x in range(left_blank):
-                line += GRAY[0]
-            for x in range(im.size[0]):
-                color_int = pixel_access[x, y]
-                line += GRAY[int(color_int / DIV)] if color_int == transparency_color else GRAY[0]
-            screen += line + '\n'
-
-    if debug:
-        t.end('ascii_convert')
-        for data in t.times:
-            screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
-        screen += ' potential fps: ' + str(1 / t.times['ascii_convert'])
-    screen = screen.rstrip()
-    if im.size[1] > MAX_Y:
-        for line in range(MAX_Y - im.size[1]):
-            screen += '\n'
-    return screen
-
-
 def process_youtube(link, fast_algorithm=False, debug=False):
     """Used if argument is a link to youtube"""
     filename = link.split('=')[-1].rstrip('/')
@@ -300,6 +250,57 @@ def process_youtube(link, fast_algorithm=False, debug=False):
             filename=filename)
         process_video(filename + '.mp4', fast_algorithm=fast_algorithm, debug=debug)
         return
+
+
+def process_image(file, debug=False):
+    """Used for image inputs"""
+    im = Image.open(file)
+    if im.format == 'GIF' and im.is_animated:
+        n_frames = 0
+        is_rgb = True
+        try:
+            int(im.load()[0, 0])
+            is_rgb = False
+            try:
+                trans = im.info['transparency']
+            except:
+                trans = None
+        except:
+            pass
+        if debug:
+            t = Timer()
+        while im:
+            frame_timer = datetime.now().timestamp()
+            if debug:
+                t.end('sleep')
+            name = '%s-%s.png' % (file, str(n_frames))
+            im.save(name, 'png')
+            if debug:
+                t.end('save individual frame')
+            f = Image.open(name)
+            if debug:
+                t.end('open image')
+            # clear_screen()
+            if debug:
+                t.end('clear screen')
+            out = ascii_convert(f, debug=debug, rgb=is_rgb, transparency_color=trans)
+            if debug:
+                t.end('generate image')
+            print(out)
+            if debug:
+                t.end('print image')
+                for data in t.times:
+                    print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
+                t.end('print debug')
+            sleep_time = (1 / FRAME_RATE) - (datetime.now().timestamp() - frame_timer)
+            sleep(sleep_time if sleep_time > 0 else 0)
+            n_frames += 1
+            try:
+                im.seek(n_frames)
+            except EOFError:
+                n_frames = 0
+    elif str(im.format).lower() in IMAGE_FORMATS:
+        print(ascii_convert(im, debug=debug))
 
 
 def main():
