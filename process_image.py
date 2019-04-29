@@ -13,10 +13,10 @@ if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
     from ctypes import windll
 
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
-FRAMERATE = 20
-FRAMETIME = 1 / FRAMERATE
-GRAYSCALE = " .:-=+*#%@"
-GRAY = list(i for i in GRAYSCALE)
+FRAME_RATE = 20
+FRAME_TIME = 1 / FRAME_RATE
+GRAY_SCALE = " .:-=+*#%@"
+GRAY = list(i for i in GRAY_SCALE)
 DIV = 256 / len(GRAY)
 WHITE = '\x1b[0m'
 RED = '\033[31m'
@@ -27,10 +27,10 @@ YELLOW = '\033[93m'
 CYAN = '\033[36m'
 
 COLOR_THRESHOLD = 64
-MAXX = 315
-MAXY = 80
+MAX_X = 315
+MAX_Y = 80
 COLOR = True if len(argv) > 2 and argv[2] == 'color' else False
-VBLANK = True
+V_BLANK = True
 IMAGE_FORMATS = ['png', 'jpg', 'bmp', 'jpeg', 'gif']
 VIDEO_FORMATS = ['mp4']
 AVAILABLE_COLORS = [WHITE, RED, GREEN, BLUE, YELLOW, CYAN, PURPLE]
@@ -54,15 +54,15 @@ def process_image(file, debug=False):
     """Used for image inputs"""
     im = Image.open(file)
     if im.format == 'GIF' and im.is_animated:
-        nframes = 0
+        n_frames = 0
         is_rgb = True
         try:
             int(im.load()[0, 0])
             is_rgb = False
             try:
-                transp = im.info['transparency']
+                trans = im.info['transparency']
             except:
-                transp = None
+                trans = None
         except:
             pass
         if debug:
@@ -71,7 +71,7 @@ def process_image(file, debug=False):
             frame_timer = datetime.now().timestamp()
             if debug:
                 t.end('sleep')
-            name = '%s-%s.png' % (file, str(nframes))
+            name = '%s-%s.png' % (file, str(n_frames))
             im.save(name, 'png')
             if debug:
                 t.end('save individual frame')
@@ -81,7 +81,7 @@ def process_image(file, debug=False):
             # clear_screen()
             if debug:
                 t.end('clear screen')
-            out = ascii_convert(f, debug=debug, rgb=is_rgb, transparency_color=transp)
+            out = ascii_convert(f, debug=debug, rgb=is_rgb, transparency_color=trans)
             if debug:
                 t.end('generate image')
             print(out)
@@ -90,13 +90,13 @@ def process_image(file, debug=False):
                 for data in t.times:
                     print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
                 t.end('print debug')
-            sleep_time = (1 / FRAMERATE) - (datetime.now().timestamp() - frame_timer)
+            sleep_time = (1 / FRAME_RATE) - (datetime.now().timestamp() - frame_timer)
             sleep(sleep_time if sleep_time > 0 else 0)
-            nframes += 1
+            n_frames += 1
             try:
-                im.seek(nframes)
+                im.seek(n_frames)
             except EOFError:
-                nframes = 0
+                n_frames = 0
     elif str(im.format).lower() in IMAGE_FORMATS:
         print(ascii_convert(im, debug=debug))
 
@@ -162,12 +162,12 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
         screen += ' potential fps: ' + str(1 / t.times['ascii_convert_fast']) + ' output_x: ' + str(
             output_x) + ' output_y: ' + str(output_y) + ' COLOR: ' + str(COLOR)
     screen = screen.rstrip()
-    if VBLANK or output_y < MAXY:
+    if V_BLANK or output_y < MAX_Y:
         clear_screen()
     return screen
 
 
-def process_video(file, fast_algo=False, debug=False):
+def process_video(file, fast_algorithm=False, debug=False):
     """Used for all video input"""
     cap = cv2.VideoCapture(file)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -175,22 +175,22 @@ def process_video(file, fast_algo=False, debug=False):
     duration_s = total_frames / fps
     video_y = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     video_x = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    if fast_algo:
-        if video_x > MAXX or video_y > MAXY:
-            if video_x > MAXX:
-                percent = (MAXX / float(video_x))
-                hsize = int((float(video_y) * float(percent)))
-                wsize = MAXX
-            if video_y > MAXY:
-                percent = (MAXY / float(video_y))
-                hsize = MAXY
-                wsize = int((float(video_x) * float(percent)))
-            output_x = wsize * 2  # multiply width by 2 because most fonts are taller than they are wide
-            output_y = hsize
+    if fast_algorithm:
+        if video_x > MAX_X or video_y > MAX_Y:
+            if video_x > MAX_X:
+                percent = (MAX_X / float(video_x))
+                h_size = int((float(video_y) * float(percent)))
+                w_size = MAX_X
+            if video_y > MAX_Y:
+                percent = (MAX_Y / float(video_y))
+                h_size = MAX_Y
+                w_size = int((float(video_x) * float(percent)))
+            output_x = w_size * 2  # multiply width by 2 because most fonts are taller than they are wide
+            output_y = h_size
         else:
-            output_x = MAXX
-            output_y = MAXY
-        left_blank = int((MAXX - output_x) / 2)
+            output_x = MAX_X
+            output_y = MAX_Y
+        left_blank = int((MAX_X - output_x) / 2)
     current_frame = 0
     start_time = datetime.now().timestamp()
     t = Timer()  #
@@ -204,22 +204,22 @@ def process_video(file, fast_algo=False, debug=False):
         should_be_at = round(time_elapsed * fps)
         skip_frame = True if current_frame < should_be_at else False
         if not skip_frame:
-            if fast_algo:
-                # Fast algo, use njit no python mode
+            if fast_algorithm:
+                # Fast algorithm, use njit no python mode
                 print(ascii_convert_fast(frame, output_x, output_y, left_blank, debug=debug))
             else:
-                # Slow algo, use PIL
+                # Slow algorithm, use PIL
                 f = Image.fromarray(frame)
                 print(ascii_convert(f, debug=debug, rgb=True))
             if debug:
-                t.end('actual frametime')  #
+                t.end('actual frame time')  #
                 for data in t.times:
                     print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
-                print('actual fps', "{0:.1f}".format(1 / (t.times['actual frametime'])), '\tcurrent_frame',
+                print('actual fps', "{0:.1f}".format(1 / (t.times['actual frame time'])), '\tcurrent_frame',
                       current_frame, '\tshould_be_at', should_be_at, '\tvideo progress %',
                       (time_elapsed / duration_s) * 100, end='', flush=True)
             frame_took = datetime.now().timestamp() - frame_time
-            sleep_time = FRAMETIME - frame_took
+            sleep_time = FRAME_TIME - frame_took
             if sleep_time > 0:
                 sleep(sleep_time)
     print('')
@@ -229,22 +229,22 @@ def process_video(file, fast_algo=False, debug=False):
 
 
 def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
-    """Slow algo"""
+    """Slow algorithm"""
     if debug:
         t = Timer()
     im = im.resize((im.size[0] * 2, im.size[1]))
-    if im.size[0] > MAXX or im.size[1] > MAXY:
-        if im.size[0] > MAXX:
-            percent = (MAXX / float(im.size[0]))
-            hsize = int((float(im.size[1]) * float(percent)))
-            wsize = MAXX
-        if im.size[1] > MAXY:
-            percent = (MAXY / float(im.size[1]))
-            hsize = MAXY
-            wsize = int((float(im.size[0]) * float(percent)))
-        im = im.resize((wsize, hsize))
+    if im.size[0] > MAX_X or im.size[1] > MAX_Y:
+        if im.size[0] > MAX_X:
+            percent = (MAX_X / float(im.size[0]))
+            h_size = int((float(im.size[1]) * float(percent)))
+            w_size = MAX_X
+        if im.size[1] > MAX_Y:
+            percent = (MAX_Y / float(im.size[1]))
+            h_size = MAX_Y
+            w_size = int((float(im.size[0]) * float(percent)))
+        im = im.resize((w_size, h_size))
     pixel_access = im.load()
-    left_blank = int((MAXX - im.size[0]) / 2)
+    left_blank = int((MAX_X - im.size[0]) / 2)
 
     screen = ''
     if rgb:
@@ -278,50 +278,50 @@ def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
             screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
         screen += ' potential fps: ' + str(1 / t.times['ascii_convert'])
     screen = screen.rstrip()
-    if im.size[1] > MAXY:
-        for line in range(MAXY - im.size[1]):
+    if im.size[1] > MAX_Y:
+        for line in range(MAX_Y - im.size[1]):
             screen += '\n'
     return screen
 
 
-def process_youtube(link, fast_algo=False, debug=False):
+def process_youtube(link, fast_algorithm=False, debug=False):
     """Used if argument is a link to youtube"""
     filename = link.split('=')[-1].rstrip('/')
     #  yt = YouTube(link)
     #  todo: show thumbnail while downloading
     #  yt.thumbnail_url
     if path.isfile(filename + '.mp4'):
-        process_video(filename + '.mp4', fast_algo, debug)
+        process_video(filename + '.mp4', fast_algorithm=fast_algorithm, debug=debug)
         return
     else:
         yt = YouTube(link)
         print('Downloading %s...' % yt.title)
         yt.streams.filter(file_extension='mp4', progressive=True).order_by('resolution').desc().first().download(
             filename=filename)
-        process_video(filename + '.mp4', fast_algo, debug)
+        process_video(filename + '.mp4', fast_algorithm=fast_algorithm, debug=debug)
         return
 
 
 def main():
     #  look at file extension to figure out what to do with it
-    if len(argv) == 3:
-        fast_algo = True
+    if len(argv) >= 3:
+        fast_algorithm = True
         debug = False
     elif len(argv) > 3:
-        fast_algo = True
+        fast_algorithm = True
         debug = True
     else:
-        fast_algo, debug = False, False
+        fast_algorithm, debug = False, False
     if len(argv) < 2:
         return print('No arguments given!')
     if argv[1].startswith('http') and 'youtube' in argv[1]:
-        process_youtube(argv[1], fast_algo, debug)
+        process_youtube(argv[1], fast_algorithm=fast_algorithm, debug=debug)
         return
     ext = argv[1].split('.')[-1].lower()
     if ext in IMAGE_FORMATS:
-        process_image(argv[1], debug)
+        process_image(argv[1], debug=debug)
     elif ext in VIDEO_FORMATS:
-        process_video(argv[1], fast_algo, debug)
+        process_video(argv[1], fast_algorithm=fast_algorithm, debug=debug)
     else:
         print('Not sure what to do with %s files' % ext)
 
