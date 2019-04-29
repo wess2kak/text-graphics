@@ -105,14 +105,14 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
             line += GRAY[0]
         if COLOR:
             for x in range(output_x):
-                h, s, v = frame[y][x]
+                h, s, v = hsv[y][x]
                 p = populate_pixel_hsv(v)
                 c = populate_color_hsv(h, s, v)
                 line += AVAILABLE_COLORS[c] + GRAY[p]
             line += WHITE if COLOR else ''
         else:
             for x in range(output_x):
-                v = frame[y][x][2]
+                v = hsv[y][x][2]
                 line += GRAY[populate_pixel_hsv(v)]
         screen += line + '\n'
     if debug:
@@ -169,8 +169,9 @@ def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
             for x in range(left_blank):
                 line += GRAY[0]
             for x in range(im.size[0]):
-                color_int = pixel_access[x, y]
-                line += GRAY[int(color_int / DIV)] if color_int == transparency_color else GRAY[0]
+                color_index = pixel_access[x, y]
+                p = populate_pixel_hsv(color_index)
+                line += GRAY[p] if color_index != transparency_color else GRAY[0]
             screen += line + '\n'
 
     if debug:
@@ -318,14 +319,12 @@ def process_image(file, debug=False):
 def main():
     #  look at file extension to figure out what to do with it
     print(HIDE_CURSOR)
-    if len(argv) >= 3:
+    fast_algorithm = False
+    debug = False
+    if 'fast' in argv:
         fast_algorithm = True
-        debug = False
-    elif len(argv) > 3:
-        fast_algorithm = True
+    if 'debug' in argv:
         debug = True
-    else:
-        fast_algorithm, debug = False, False
     if len(argv) < 2:
         return print('No arguments given!')
     if argv[1].startswith('http') and 'youtube' in argv[1]:
