@@ -17,13 +17,25 @@ FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
 GRAY = list(i for i in GRAY_SCALE)
 DIV = 256 / len(GRAY)
-WHITE = '\x1b[0m'
-RED = '\033[31m'
-GREEN = '\033[32m'
-BLUE = '\033[34m'
-PURPLE = '\033[35m'
-YELLOW = '\033[93m'
-CYAN = '\033[36m'
+# ANSI escape codes
+FG_MODE = True
+if FG_MODE:
+    WHITE = '\033[0m'
+    RED = '\033[31m'
+    GREEN = '\033[32m'
+    YELLOW = '\033[33m'
+    BLUE = '\033[34m'
+    PURPLE = '\033[35m'
+    CYAN = '\033[36m'
+else:
+    WHITE = '\033[0m'
+    RED = '\033[41m'
+    GREEN = '\033[42m'
+    YELLOW = '\033[43m'
+    BLUE = '\033[44m'
+    PURPLE = '\033[45m'
+    CYAN = '\033[46m'
+HIDE_CURSOR = '\033[?25l'
 
 COLOR_THRESHOLD = 64
 MAX_X = 315
@@ -305,6 +317,7 @@ def process_image(file, debug=False):
 
 def main():
     #  look at file extension to figure out what to do with it
+    print(HIDE_CURSOR)
     if len(argv) >= 3:
         fast_algorithm = True
         debug = False
