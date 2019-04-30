@@ -1,8 +1,8 @@
 from datetime import datetime
-from os import path, name as osname
+from os import path, remove, name as osname
 from sys import argv, stdout
 from time import sleep
-
+from urllib import request
 import cv2
 import numpy as np
 from PIL import Image
@@ -252,14 +252,12 @@ def process_video(file):
 def process_youtube(link):
     """Used if argument is a link to youtube"""
     filename = link.split('=')[-1].rstrip('/')
-    #  yt = YouTube(link)
-    #  todo: show thumbnail while downloading
-    #  yt.thumbnail_url
     if path.isfile(filename + '.mp4'):
         process_video(filename + '.mp4')
         return
     else:
         yt = YouTube(link)
+        process_remote_image(yt.thumbnail_url)
         print('Downloading %s...' % yt.title)
         yt.streams.filter(file_extension='mp4', progressive=True).order_by('resolution').desc().first().download(
             filename=filename)
@@ -304,6 +302,19 @@ def process_image(file):
         print(ascii_convert_pil(im))
 
 
+def process_remote_image(link):
+    ext = link.split('.')[-1]
+    temp_image = str(str(datetime.now().timestamp()) + '.' + ext)
+    req = request.Request(link)
+    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
+                         + ' Chrome/73.0.3683.103 Safari/537.36')
+    remote_content = request.urlopen(req).read()
+    with open(temp_image, 'wb') as f:
+        f.write(remote_content)
+    process_image(temp_image)
+    remove(temp_image)
+
+
 def main():
     #  look at file extension to figure out what to do with it
     print(HIDE_CURSOR)
@@ -313,6 +324,9 @@ def main():
         process_youtube(argv[1])
         return
     ext = argv[1].split('.')[-1].lower()
+    if argv[1].startswith('http') and ext in IMAGE_FORMATS:
+        process_remote_image(argv[1])
+        return
     if ext in IMAGE_FORMATS:
         process_image(argv[1])
     elif ext in VIDEO_FORMATS:
