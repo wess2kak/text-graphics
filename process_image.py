@@ -23,7 +23,7 @@ DIV = 256 / len(GRAY)
 FAST = True if 'fast' in argv else False
 DEBUG = True if 'debug' in argv else False
 COLOR = True if 'color' in argv else False
-COLOR_THRESHOLD = 64
+COLOR_THRESHOLD = 300
 MAX_X = 315
 MAX_Y = 80
 V_BLANK = True
@@ -71,22 +71,22 @@ def populate_color_hsv(h, s, v):
     """Returns an approximate index value in the color list to represent the color of this pixel"""
     h *= 2
     if 81 <= h <= 145:  # green
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 2
     elif 186 <= h <= 275:  # blue
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 3
     elif 21 <= h <= 80:  # yellow
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 4
     elif 146 <= h <= 185:  # cyan
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 5
     elif 275 <= h <= 344:  # purple/magenta
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 6
     elif h >= 345 or h <= 20:  # red
-        if s + v >= 256:
+        if s + v >= COLOR_THRESHOLD:
             return 1
     return 0
 
