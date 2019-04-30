@@ -69,23 +69,24 @@ def clear_screen():
 @njit(parallel=True, fastmath=True)
 def populate_color_hsv(h, s, v):
     """Returns an approximate index value in the color list to represent the color of this pixel"""
-    if 145 >= h >= 81:  # green
-        if s + v >= 255:
+    h *= 2
+    if 81 <= h <= 145:  # green
+        if s + v >= 256:
             return 2
     elif 186 <= h <= 275:  # blue
-        if s + v >= 255:
+        if s + v >= 256:
             return 3
-    elif 80 >= h >= 51:  # yellow
-        if s + v >= 255:
+    elif 21 <= h <= 80:  # yellow
+        if s + v >= 256:
             return 4
     elif 146 <= h <= 185:  # cyan
-        if s + v >= 255:
+        if s + v >= 256:
             return 5
-    elif h >= 275 or h <= 344:  # purple/magenta
-        if s + v >= 255:
+    elif 275 <= h <= 344:  # purple/magenta
+        if s + v >= 256:
             return 6
     elif h >= 345 or h <= 20:  # red
-        if s + v >= 255:
+        if s + v >= 256:
             return 1
     return 0
 
