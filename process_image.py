@@ -3,6 +3,7 @@ from os import path, remove, name as osname
 from sys import argv, stdout
 from time import sleep
 from urllib import request
+
 import cv2
 import numpy as np
 from PIL import Image
@@ -11,7 +12,9 @@ from pytube import YouTube
 
 if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
     from ctypes import windll
+
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
+
 FRAME_RATE = 20
 FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
@@ -307,7 +310,7 @@ def process_remote_image(link):
     temp_image = str(str(datetime.now().timestamp()) + '.' + ext)
     req = request.Request(link)
     req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
-                         + ' Chrome/73.0.3683.103 Safari/537.36')
+                   + ' Chrome/73.0.3683.103 Safari/537.36')
     remote_content = request.urlopen(req).read()
     with open(temp_image, 'wb') as f:
         f.write(remote_content)
