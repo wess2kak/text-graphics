@@ -37,10 +37,12 @@ else:
     CYAN = '\033[46m'
 HIDE_CURSOR = '\033[?25l'
 
+FAST = True if 'fast' in argv else False
+DEBUG = True if 'debug' in argv else False
+COLOR = True if 'color' in argv else False
 COLOR_THRESHOLD = 64
 MAX_X = 315
 MAX_Y = 80
-COLOR = True if len(argv) > 2 and argv[2] == 'color' else False
 V_BLANK = True
 IMAGE_FORMATS = ['png', 'jpg', 'bmp', 'jpeg', 'gif']
 VIDEO_FORMATS = ['mp4']
@@ -63,7 +65,7 @@ def clear_screen():
 
 @njit(parallel=True, fastmath=True)
 def populate_color_hsv(h, s, v):
-    """Used by fast algorithm"""
+    """Returns an approximate index value in the color list to represent the color of this pixel"""
     if 140 >= h >= 81:  # green
         if s + v >= 150:
             return 2
@@ -87,14 +89,14 @@ def populate_color_hsv(h, s, v):
 
 @njit(parallel=True, fastmath=True)
 def populate_pixel_hsv(v):
-    """Used by fast algorithm"""
+    """Returns the correct index value in the gray scale to represent the color of this value"""
     pixel_index = int(v / DIV)
     return pixel_index
 
 
-def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
+def ascii_convert_fast(frame, output_x, output_y, left_blank):
     """Fast algorithm"""
-    if debug:
+    if DEBUG:
         t = Timer()
     frame = cv2.resize(frame, (output_x, output_y))
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
@@ -115,7 +117,7 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
                 v = hsv[y][x][2]
                 line += GRAY[populate_pixel_hsv(v)]
         screen += line + '\n'
-    if debug:
+    if DEBUG:
         t.end('ascii_convert_fast')
         for data in t.times:
             screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
@@ -127,9 +129,9 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank, debug=False):
     return screen
 
 
-def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
+def ascii_convert(im, rgb=True, transparency_color=None):
     """Slow algorithm"""
-    if debug:
+    if DEBUG:
         t = Timer()
     im = im.resize((im.size[0] * 2, im.size[1]))
     if im.size[0] > MAX_X or im.size[1] > MAX_Y:
@@ -163,7 +165,7 @@ def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
                     h, s, v = hsv[y][x]
                     line += GRAY[populate_pixel_hsv(v)]
             screen += line + '\n'
-    else:
+    else:  # image is indexed color
         for y in range(im.size[1]):
             line = ''
             for x in range(left_blank):
@@ -174,7 +176,7 @@ def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
                 line += GRAY[p] if color_index != transparency_color else GRAY[0]
             screen += line + '\n'
 
-    if debug:
+    if DEBUG:
         t.end('ascii_convert')
         for data in t.times:
             screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
@@ -186,7 +188,7 @@ def ascii_convert(im, rgb=True, debug=False, transparency_color=None):
     return screen
 
 
-def process_video(file, fast_algorithm=False, debug=False):
+def process_video(file):
     """Used for all video input"""
     cap = cv2.VideoCapture(file)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -194,7 +196,7 @@ def process_video(file, fast_algorithm=False, debug=False):
     duration_s = total_frames / fps
     video_y = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     video_x = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    if fast_algorithm:
+    if FAST:
         if video_x > MAX_X or video_y > MAX_Y:
             if video_x > MAX_X:
                 percent = (MAX_X / float(video_x))
@@ -223,14 +225,14 @@ def process_video(file, fast_algorithm=False, debug=False):
         should_be_at = round(time_elapsed * fps)
         skip_frame = True if current_frame < should_be_at else False
         if not skip_frame:
-            if fast_algorithm:
+            if FAST:
                 # Fast algorithm, use njit no python mode
-                print(ascii_convert_fast(frame, output_x, output_y, left_blank, debug=debug))
+                print(ascii_convert_fast(frame, output_x, output_y, left_blank))
             else:
                 # Slow algorithm, use PIL
                 f = Image.fromarray(frame)
-                print(ascii_convert(f, debug=debug, rgb=True))
-            if debug:
+                print(ascii_convert(f, rgb=True))
+            if DEBUG:
                 t.end('actual frame time')  #
                 for data in t.times:
                     print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
@@ -247,64 +249,50 @@ def process_video(file, fast_algorithm=False, debug=False):
     return
 
 
-def process_youtube(link, fast_algorithm=False, debug=False):
+def process_youtube(link):
     """Used if argument is a link to youtube"""
     filename = link.split('=')[-1].rstrip('/')
     #  yt = YouTube(link)
     #  todo: show thumbnail while downloading
     #  yt.thumbnail_url
     if path.isfile(filename + '.mp4'):
-        process_video(filename + '.mp4', fast_algorithm=fast_algorithm, debug=debug)
+        process_video(filename + '.mp4')
         return
     else:
         yt = YouTube(link)
         print('Downloading %s...' % yt.title)
         yt.streams.filter(file_extension='mp4', progressive=True).order_by('resolution').desc().first().download(
             filename=filename)
-        process_video(filename + '.mp4', fast_algorithm=fast_algorithm, debug=debug)
+        process_video(filename + '.mp4')
         return
 
 
-def process_image(file, debug=False):
+def process_image(file):
     """Used for image inputs"""
     im = Image.open(file)
     if im.format == 'GIF' and im.is_animated:
         n_frames = 0
         is_rgb = True
-        try:
-            int(im.load()[0, 0])
+        trans = None
+        if isinstance(im.load()[0, 0], int):
             is_rgb = False
-            try:
+            if 'transparency' in im.info:
                 trans = im.info['transparency']
-            except:
-                trans = None
-        except:
-            pass
-        if debug:
+        if DEBUG:
             t = Timer()
         while im:
             frame_timer = datetime.now().timestamp()
-            if debug:
-                t.end('sleep')
             name = '%s-%s.png' % (file, str(n_frames))
             im.save(name, 'png')
-            if debug:
-                t.end('save individual frame')
             f = Image.open(name)
-            if debug:
-                t.end('open image')
-            # clear_screen()
-            if debug:
-                t.end('clear screen')
-            out = ascii_convert(f, debug=debug, rgb=is_rgb, transparency_color=trans)
-            if debug:
+            out = ascii_convert(f, rgb=is_rgb, transparency_color=trans)
+            if DEBUG:
                 t.end('generate image')
             print(out)
-            if debug:
+            if DEBUG:
                 t.end('print image')
                 for data in t.times:
                     print(data + ': ' + "{0:.3f}s\t".format(t.times[data]), end='', flush=True)
-                t.end('print debug')
             sleep_time = (1 / FRAME_RATE) - (datetime.now().timestamp() - frame_timer)
             sleep(sleep_time if sleep_time > 0 else 0)
             n_frames += 1
@@ -313,28 +301,22 @@ def process_image(file, debug=False):
             except EOFError:
                 n_frames = 0
     elif str(im.format).lower() in IMAGE_FORMATS:
-        print(ascii_convert(im, debug=debug))
+        print(ascii_convert(im))
 
 
 def main():
     #  look at file extension to figure out what to do with it
     print(HIDE_CURSOR)
-    fast_algorithm = False
-    debug = False
-    if 'fast' in argv:
-        fast_algorithm = True
-    if 'debug' in argv:
-        debug = True
     if len(argv) < 2:
         return print('No arguments given!')
     if argv[1].startswith('http') and 'youtube' in argv[1]:
-        process_youtube(argv[1], fast_algorithm=fast_algorithm, debug=debug)
+        process_youtube(argv[1])
         return
     ext = argv[1].split('.')[-1].lower()
     if ext in IMAGE_FORMATS:
-        process_image(argv[1], debug=debug)
+        process_image(argv[1])
     elif ext in VIDEO_FORMATS:
-        process_video(argv[1], fast_algorithm=fast_algorithm, debug=debug)
+        process_video(argv[1])
     else:
         print('Not sure what to do with %s files' % ext)
 
