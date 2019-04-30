@@ -17,6 +17,16 @@ FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
 GRAY = list(i for i in GRAY_SCALE)
 DIV = 256 / len(GRAY)
+FAST = True if 'fast' in argv else False
+DEBUG = True if 'debug' in argv else False
+COLOR = True if 'color' in argv else False
+COLOR_THRESHOLD = 64
+MAX_X = 315
+MAX_Y = 80
+V_BLANK = True
+IMAGE_FORMATS = ['png', 'jpg', 'bmp', 'jpeg', 'gif']
+VIDEO_FORMATS = ['mp4']
+
 # ANSI escape codes
 FG_MODE = True
 if FG_MODE:
@@ -36,16 +46,6 @@ else:
     PURPLE = '\033[45m'
     CYAN = '\033[46m'
 HIDE_CURSOR = '\033[?25l'
-
-FAST = True if 'fast' in argv else False
-DEBUG = True if 'debug' in argv else False
-COLOR = True if 'color' in argv else False
-COLOR_THRESHOLD = 64
-MAX_X = 315
-MAX_Y = 80
-V_BLANK = True
-IMAGE_FORMATS = ['png', 'jpg', 'bmp', 'jpeg', 'gif']
-VIDEO_FORMATS = ['mp4']
 AVAILABLE_COLORS = [WHITE, RED, GREEN, BLUE, YELLOW, CYAN, PURPLE]
 
 
@@ -66,23 +66,23 @@ def clear_screen():
 @njit(parallel=True, fastmath=True)
 def populate_color_hsv(h, s, v):
     """Returns an approximate index value in the color list to represent the color of this pixel"""
-    if 140 >= h >= 81:  # green
-        if s + v >= 150:
+    if 145 >= h >= 81:  # green
+        if s + v >= 255:
             return 2
-    elif 221 <= h <= 240:  # blue
-        if s + v >= 150:
+    elif 186 <= h <= 275:  # blue
+        if s + v >= 255:
             return 3
-    elif 60 >= h >= 51:  # yellow
-        if s + v >= 150:
+    elif 80 >= h >= 51:  # yellow
+        if s + v >= 255:
             return 4
-    elif 170 <= h <= 200:  # cyan
-        if s + v >= 150:
+    elif 146 <= h <= 185:  # cyan
+        if s + v >= 255:
             return 5
-    elif h >= 281 or h <= 320:  # purple/magenta
-        if s + v >= 150:
+    elif h >= 275 or h <= 344:  # purple/magenta
+        if s + v >= 255:
             return 6
-    elif h >= 355 or h <= 10:  # red
-        if s + v >= 150:
+    elif h >= 345 or h <= 20:  # red
+        if s + v >= 255:
             return 1
     return 0
 
@@ -94,8 +94,8 @@ def populate_pixel_hsv(v):
     return pixel_index
 
 
-def ascii_convert_fast(frame, output_x, output_y, left_blank):
-    """Fast algorithm"""
+def ascii_convert_cv2(frame, output_x, output_y, left_blank):
+    """Uses cv2 for fast math on video frames"""
     if DEBUG:
         t = Timer()
     frame = cv2.resize(frame, (output_x, output_y))
@@ -129,8 +129,8 @@ def ascii_convert_fast(frame, output_x, output_y, left_blank):
     return screen
 
 
-def ascii_convert(im, rgb=True, transparency_color=None):
-    """Slow algorithm"""
+def ascii_convert_pil(im, rgb=True, transparency_color=None):
+    """Uses PIL instead of cv2 for still images and animated GIF files"""
     if DEBUG:
         t = Timer()
     im = im.resize((im.size[0] * 2, im.size[1]))
@@ -227,11 +227,11 @@ def process_video(file):
         if not skip_frame:
             if FAST:
                 # Fast algorithm, use njit no python mode
-                print(ascii_convert_fast(frame, output_x, output_y, left_blank))
+                print(ascii_convert_cv2(frame, output_x, output_y, left_blank))
             else:
                 # Slow algorithm, use PIL
                 f = Image.fromarray(frame)
-                print(ascii_convert(f, rgb=True))
+                print(ascii_convert_pil(f, rgb=True))
             if DEBUG:
                 t.end('actual frame time')  #
                 for data in t.times:
@@ -285,7 +285,7 @@ def process_image(file):
             name = '%s-%s.png' % (file, str(n_frames))
             im.save(name, 'png')
             f = Image.open(name)
-            out = ascii_convert(f, rgb=is_rgb, transparency_color=trans)
+            out = ascii_convert_pil(f, rgb=is_rgb, transparency_color=trans)
             if DEBUG:
                 t.end('generate image')
             print(out)
@@ -301,7 +301,7 @@ def process_image(file):
             except EOFError:
                 n_frames = 0
     elif str(im.format).lower() in IMAGE_FORMATS:
-        print(ascii_convert(im))
+        print(ascii_convert_pil(im))
 
 
 def main():
