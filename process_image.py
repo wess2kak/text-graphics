@@ -322,7 +322,7 @@ def process_remote_image(link):
         process_image(temp_image)
         remove(temp_image)
     except:
-     pass
+        pass
 
 
 def main():
