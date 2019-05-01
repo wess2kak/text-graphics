@@ -15,7 +15,7 @@ if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
 
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
 
-FRAME_RATE = 20
+FRAME_RATE = 5
 FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
 GRAY = list(i for i in GRAY_SCALE)
@@ -23,7 +23,6 @@ DIV = 256 / len(GRAY)
 FAST = True if 'fast' in argv else False
 DEBUG = True if 'debug' in argv else False
 COLOR = True if 'color' in argv else False
-COLOR_THRESHOLD = 300
 MAX_X = 315
 MAX_Y = 80
 V_BLANK = True
@@ -31,25 +30,21 @@ IMAGE_FORMATS = ['png', 'jpg', 'bmp', 'jpeg', 'gif']
 VIDEO_FORMATS = ['mp4']
 
 # ANSI escape codes
-FG_MODE = True
-if FG_MODE:
-    WHITE = '\033[0m'
-    RED = '\033[31m'
-    GREEN = '\033[32m'
-    YELLOW = '\033[33m'
-    BLUE = '\033[34m'
-    PURPLE = '\033[35m'
-    CYAN = '\033[36m'
-else:
-    WHITE = '\033[0m'
-    RED = '\033[41m'
-    GREEN = '\033[42m'
-    YELLOW = '\033[43m'
-    BLUE = '\033[44m'
-    PURPLE = '\033[45m'
-    CYAN = '\033[46m'
+WHITE = '\033[0m' # anything not saturated and bright enough to be represented by a color
+RED = '\033[31m' # red 0 100 73
+GREEN = '\033[32m' # green 120 100 73
+BLUE = '\033[34m' # blue 240 100 73
+YELLOW = '\033[33m' # yellow 60 100 73
+CYAN = '\033[36m' # cyan 180 100 73
+PURPLE = '\033[35m' # purple 300 100 73
+BRIGHT_RED = '\033[1m\033[31m' # b. red 0 66 100
+BRIGHT_GREEN = '\033[1m\033[32m' # b. green 120 66 100
+BRIGHT_BLUE = '\033[1m\033[34m' # b. blue 240 66 100
+BRIGHT_YELLOW = '\033[1m\033[33m' # b. yellow 60 66 100
+BRIGHT_CYAN = '\033[1m\033[36m' # b. cyan 180 66 100
+BRIGHT_PURPLE = '\033[1m\033[35m' # b. purple 300 66 100
 HIDE_CURSOR = '\033[?25l'
-AVAILABLE_COLORS = [WHITE, RED, GREEN, BLUE, YELLOW, CYAN, PURPLE]
+AVAILABLE_COLORS = ['', RED, GREEN, BLUE, YELLOW, CYAN, PURPLE, WHITE, BRIGHT_RED, BRIGHT_GREEN, BRIGHT_BLUE, BRIGHT_YELLOW, BRIGHT_CYAN, BRIGHT_PURPLE]
 
 
 class Timer:
@@ -69,33 +64,42 @@ def clear_screen():
 @njit(parallel=True, fastmath=True)
 def populate_color_hsv(h, s, v):
     """Returns an approximate index value in the color list to represent the color of this pixel"""
+    if s < 50 and v > 50: # white if saturation is below 50 and brightness above 50
+        return 7
     h *= 2
-    if 81 <= h <= 145:  # green
-        if s + v >= COLOR_THRESHOLD:
-            return 2
-    elif 186 <= h <= 275:  # blue
-        if s + v >= COLOR_THRESHOLD:
-            return 3
-    elif 21 <= h <= 80:  # yellow
-        if s + v >= COLOR_THRESHOLD:
-            return 4
-    elif 146 <= h <= 185:  # cyan
-        if s + v >= COLOR_THRESHOLD:
-            return 5
-    elif 275 <= h <= 344:  # purple/magenta
-        if s + v >= COLOR_THRESHOLD:
-            return 6
-    elif h >= 345 or h <= 20:  # red
-        if s + v >= COLOR_THRESHOLD:
-            return 1
+    if 91 <= h <= 150:  # green
+        return 2 if s > v else 9
+    elif 211 <= h <= 270:  # blue
+        return 3 if s > v else 10
+    elif 31 <= h <= 90:  # yellow
+        return 4 if s > v else 11
+    elif 151 <= h <= 210:  # cyan
+        return 5 if s > v else 12
+    elif 271 <= h <= 330:  # purple/magenta
+        return 6 if s > v else 13
+    elif h >= 331 or h <= 30:  # red
+        return 1 if s > v else 8
+    '''
+    if 61 <= h <= 180:  # green
+        return 2
+    elif 181 <= h <= 300:  # blue
+        return 3
+    elif h >= 301 or h <= 60:  # red
+        return 1
+    ''' # move comment to bottom for high color mode
     return 0
-
 
 @njit(parallel=True, fastmath=True)
 def populate_pixel_hsv(v):
     """Returns the correct index value in the gray scale to represent the color of this value"""
     pixel_index = int(v / DIV)
     return pixel_index
+
+
+@njit(parallel=True, fastmath=True)
+def access_hsv(y, x, hsv):
+    h, s, v = hsv[y][x]
+    return h, s, v
 
 
 def ascii_convert_cv2(frame, output_x, output_y, left_blank):
@@ -105,27 +109,33 @@ def ascii_convert_cv2(frame, output_x, output_y, left_blank):
     frame = cv2.resize(frame, (output_x, output_y))
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     screen = ''
+    prev = 0
     for y in range(output_y):
         line = ''
         for x in range(left_blank):
             line += GRAY[0]
         if COLOR:
             for x in range(output_x):
-                h, s, v = hsv[y][x]
+                h, s, v = access_hsv(y, x, hsv)
                 p = populate_pixel_hsv(v)
                 c = populate_color_hsv(h, s, v)
-                line += AVAILABLE_COLORS[c] + GRAY[p]
-            line += WHITE if COLOR else ''
+                if prev:
+                    if prev != c:
+                        line += AVAILABLE_COLORS[c]
+                else:
+                    line += AVAILABLE_COLORS[c]
+                line += GRAY[p]
+                prev = c if x else 0
         else:
             for x in range(output_x):
                 v = hsv[y][x][2]
                 line += GRAY[populate_pixel_hsv(v)]
         screen += line + '\n'
     if DEBUG:
-        t.end('ascii_convert_fast')
+        t.end('ascii_convert_cv2')
         for data in t.times:
             screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
-        screen += ' potential fps: ' + str(1 / t.times['ascii_convert_fast']) + ' output_x: ' + str(
+        screen += ' potential fps: ' + str(1 / t.times['ascii_convert_cv2']) + ' output_x: ' + str(
             output_x) + ' output_y: ' + str(output_y) + ' COLOR: ' + str(COLOR)
     screen = screen.rstrip()
     if V_BLANK or output_y < MAX_Y:
@@ -150,8 +160,8 @@ def ascii_convert_pil(im, rgb=True, transparency_color=None):
         im = im.resize((w_size, h_size))
     pixel_access = im.load()
     left_blank = int((MAX_X - im.size[0]) / 2)
-
     screen = ''
+    prev = 0
     if rgb:
         hsv = cv2.cvtColor(np.array(im), cv2.COLOR_RGB2HSV)
         for y in range(im.size[1]):
@@ -160,10 +170,16 @@ def ascii_convert_pil(im, rgb=True, transparency_color=None):
                 line += GRAY[0]
             if COLOR:
                 for x in range(im.size[0]):
-                    h, s, v = hsv[y][x]
+                    h, s, v = access_hsv(y, x, hsv)
                     p = populate_pixel_hsv(v)
                     c = populate_color_hsv(h, s, v)
-                    line += AVAILABLE_COLORS[c] + GRAY[p]
+                    if prev:
+                        if prev != c:
+                            line += AVAILABLE_COLORS[c]
+                    else:
+                        line += AVAILABLE_COLORS[c]
+                    line += GRAY[p]
+                    prev = c if x else 0
             else:
                 for x in range(im.size[0]):
                     h, s, v = hsv[y][x]
@@ -181,10 +197,10 @@ def ascii_convert_pil(im, rgb=True, transparency_color=None):
             screen += line + '\n'
 
     if DEBUG:
-        t.end('ascii_convert')
+        t.end('ascii_convert_pil')
         for data in t.times:
             screen += data + ': ' + "{0:.3f}s\t".format(t.times[data])
-        screen += ' potential fps: ' + str(1 / t.times['ascii_convert'])
+        screen += ' potential fps: ' + str(1 / t.times['ascii_convert_pil'])
     screen = screen.rstrip()
     if im.size[1] > MAX_Y:
         for line in range(MAX_Y - im.size[1]):
@@ -200,22 +216,21 @@ def process_video(file):
     duration_s = total_frames / fps
     video_y = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     video_x = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    if FAST:
-        if video_x > MAX_X or video_y > MAX_Y:
-            if video_x > MAX_X:
-                percent = (MAX_X / float(video_x))
-                h_size = int((float(video_y) * float(percent)))
-                w_size = MAX_X
-            if video_y > MAX_Y:
-                percent = (MAX_Y / float(video_y))
-                h_size = MAX_Y
-                w_size = int((float(video_x) * float(percent)))
-            output_x = w_size * 2  # multiply width by 2 because most fonts are taller than they are wide
-            output_y = h_size
-        else:
-            output_x = MAX_X
-            output_y = MAX_Y
-        left_blank = int((MAX_X - output_x) / 2)
+    if video_x > MAX_X or video_y > MAX_Y:
+        if video_x > MAX_X:
+            percent = (MAX_X / float(video_x))
+            h_size = int((float(video_y) * float(percent)))
+            w_size = MAX_X
+        if video_y > MAX_Y:
+            percent = (MAX_Y / float(video_y))
+            h_size = MAX_Y
+            w_size = int((float(video_x) * float(percent)))
+        output_x = w_size * 2  # multiply width by 2 because most fonts are taller than they are wide
+        output_y = h_size
+    else:
+        output_x = MAX_X
+        output_y = MAX_Y
+    left_blank = int((MAX_X - output_x) / 2)
     current_frame = 0
     start_time = datetime.now().timestamp()
     t = Timer()  #
@@ -229,13 +244,7 @@ def process_video(file):
         should_be_at = round(time_elapsed * fps)
         skip_frame = True if current_frame < should_be_at else False
         if not skip_frame:
-            if FAST:
-                # Fast algorithm, use njit no python mode
-                print(ascii_convert_cv2(frame, output_x, output_y, left_blank))
-            else:
-                # Slow algorithm, use PIL
-                f = Image.fromarray(frame)
-                print(ascii_convert_pil(f, rgb=True))
+            print(ascii_convert_cv2(frame, output_x, output_y, left_blank))
             if DEBUG:
                 t.end('actual frame time')  #
                 for data in t.times:
