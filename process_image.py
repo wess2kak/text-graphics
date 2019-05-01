@@ -15,7 +15,7 @@ if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
 
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
 
-FRAME_RATE = 10
+FRAME_RATE = 20
 FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
 GRAY = list(i for i in GRAY_SCALE)
@@ -64,7 +64,7 @@ def clear_screen():
 @njit(parallel=True, fastmath=True)
 def populate_color_hsv(h, s, v):
     """Returns an approximate index value in the color list to represent the color of this pixel"""
-    if s < 50 and v > 50: # white if saturation is below 50 and brightness above 50
+    if s < 128 and v > 128: # white if saturation is below 50% and brightness above 50%
         return 7
     h *= 2
     if 91 <= h <= 150:  # green
