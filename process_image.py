@@ -119,13 +119,10 @@ def ascii_convert_cv2(frame, output_x, output_y, left_blank):
                 h, s, v = access_hsv(y, x, hsv)
                 p = populate_pixel_hsv(v)
                 c = populate_color_hsv(h, s, v)
-                if prev:
-                    if prev != c:
-                        line += AVAILABLE_COLORS[c]
-                else:
+                if prev != c:
                     line += AVAILABLE_COLORS[c]
+                    prev = c if x else 0
                 line += GRAY[p]
-                prev = c if x else 0
         else:
             for x in range(output_x):
                 v = hsv[y][x][2]
@@ -173,13 +170,10 @@ def ascii_convert_pil(im, rgb=True, transparency_color=None):
                     h, s, v = access_hsv(y, x, hsv)
                     p = populate_pixel_hsv(v)
                     c = populate_color_hsv(h, s, v)
-                    if prev:
-                        if prev != c:
-                            line += AVAILABLE_COLORS[c]
-                    else:
+                    if prev != c:
                         line += AVAILABLE_COLORS[c]
+                        prev = c if x else 0
                     line += GRAY[p]
-                    prev = c if x else 0
             else:
                 for x in range(im.size[0]):
                     h, s, v = hsv[y][x]
