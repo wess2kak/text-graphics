@@ -15,7 +15,7 @@ if osname == 'nt':  # enable ansi escape codes on windows cmd.exe
 
     windll.kernel32.SetConsoleMode(windll.kernel32.GetStdHandle(-11), 7)
 
-FRAME_RATE = 5
+FRAME_RATE = 10
 FRAME_TIME = 1 / FRAME_RATE
 GRAY_SCALE = " .:-=+*#%@"
 GRAY = list(i for i in GRAY_SCALE)
@@ -312,14 +312,17 @@ def process_image(file):
 def process_remote_image(link):
     ext = link.split('.')[-1]
     temp_image = str(str(datetime.now().timestamp()) + '.' + ext)
-    req = request.Request(link)
-    req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
-                   + ' Chrome/73.0.3683.103 Safari/537.36')
-    remote_content = request.urlopen(req).read()
-    with open(temp_image, 'wb') as f:
-        f.write(remote_content)
-    process_image(temp_image)
-    remove(temp_image)
+    try:
+        req = request.Request(link)
+        req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
+                       + ' Chrome/73.0.3683.103 Safari/537.36')
+        remote_content = request.urlopen(req).read()
+        with open(temp_image, 'wb') as f:
+            f.write(remote_content)
+        process_image(temp_image)
+        remove(temp_image)
+    except:
+     pass
 
 
 def main():
